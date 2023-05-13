@@ -7,7 +7,6 @@
 #include <time.h>
 #include <tuple>
 #include <assert.h>
-
 #define SIZE 128
 #define N_IMAGES 10000
 
@@ -60,10 +59,12 @@ void gpu_bulk_free(struct gpu_bulk_context *context);
 
     void prefixSum(int arr[], int size, int res[]);
     __global__ void prefixSumWrapper(int arr[], int size);
+    
+    void performMapping(int maps[][LEVELS], uchar targetImg[][CHANNELS], uchar resultImg[][CHANNELS], int width, int height);
+    __global__ void performMappingWrapper(int maps[][LEVELS], uchar targetImg[][CHANNELS], uchar resultImg[][CHANNELS]);
 
-    void performMapping(uchar maps[][LEVELS], uchar targetImg[][CHANNELS], uchar resultImg[][CHANNELS], int width, int height);
-    __global__ void performMappingWrapper(uchar maps[][LEVELS], uchar targetImg[][CHANNELS], uchar resultImg[][CHANNELS]);
-
+    void create_map(int cdf_1[][LEVELS],int cdf_2[][LEVELS],int abs_cdf[][LEVELS]);
+    
 #endif
 
 

@@ -10,11 +10,11 @@
 long long int distance_sqr_between_image_arrays(uchar *img_arr1, uchar *img_arr2) {
     long long int distance_sqr = 0;
     bool foundMistake = false;
-    for (int i = 0; i < N_IMAGES * CHANNELS * SIZE * SIZE; i++) {
+    for (int i = 0; i < 1 * CHANNELS * SIZE * SIZE; i++) {
         distance_sqr += SQR(img_arr1[i] - img_arr2[i]);
         if(!foundMistake && (img_arr1[i] - img_arr2[i] != 0)){
-            //printf("%d: %d - %d = %d\n",i, img_arr1[i], img_arr2[i],  img_arr1[i] - img_arr2[i]);
-            foundMistake = true;
+            printf("%d: %d - %d = %d\n",i, img_arr1[i], img_arr2[i],  img_arr1[i] - img_arr2[i]);
+            foundMistake = false;
         }
     }
     return distance_sqr;
@@ -23,6 +23,7 @@ long long int distance_sqr_between_image_arrays(uchar *img_arr1, uchar *img_arr2
 
 
 int main() {
+    printf("##$#!!!run main !!!\n");
     uchar *images_target;
     uchar *images_refrence;
     uchar *images_out_cpu; //output of CPU computation. In CPU memory.
@@ -31,7 +32,7 @@ int main() {
     int devices;
     CUDA_CHECK( cudaGetDeviceCount(&devices) );
     printf("Number of devices: %d\n", devices);
-
+    
     CUDA_CHECK( cudaHostAlloc(&images_target, N_IMAGES * SIZE * SIZE * CHANNELS, 0) );
     CUDA_CHECK( cudaHostAlloc(&images_refrence, N_IMAGES * SIZE * SIZE * CHANNELS, 0) );
     CUDA_CHECK( cudaHostAlloc(&images_out_cpu, N_IMAGES * SIZE * SIZE * CHANNELS, 0) );
@@ -64,18 +65,23 @@ int main() {
 
     // GPU task serial computation
     printf("\n=== GPU Task Serial ===\n");
-
     struct task_serial_context *ts_context = task_serial_init();
     
     CUDA_CHECK(cudaDeviceSynchronize());
     t_start = get_time_msec();
     task_serial_process(ts_context, images_target, images_refrence, images_out_gpu_serial);
+    cudaDeviceSynchronize();
     t_finish = get_time_msec();
+    //uchar *one_img_cpu= (uchar*)malloc(sizeof(uchar)*LEVELS*SIZE*SIZE);
+    //uchar *one_img_gpu= (uchar*)malloc(sizeof(uchar)*LEVELS*SIZE*SIZE);
+    //one_img_cpu=images_out_cpu;
+    //one_img_gpu=images_out_gpu_serial;
     distance_sqr = distance_sqr_between_image_arrays(images_out_cpu, images_out_gpu_serial);
     printf("total time %f [msec]  distance from baseline %lld (should be zero)\n", t_finish - t_start, distance_sqr);
 
     task_serial_free(ts_context);
-
+    
+    /*
     // GPU bulk
     printf("\n=== GPU Bulk ===\n");
     struct gpu_bulk_context *gb_context = gpu_bulk_init();
@@ -87,6 +93,6 @@ int main() {
     printf("total time %f [msec]  distance from baseline %lld (should be zero)\n", t_finish - t_start, distance_sqr);
 
     gpu_bulk_free(gb_context);
-
+    */
     return 0;
 }

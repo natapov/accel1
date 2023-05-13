@@ -44,7 +44,7 @@ int argmin(int arr[], int size){
     return argmin;
 }
 
-void calculateMap(int targetCdf[], int refrenceCdf[],  uchar map[]){
+void calculateMap(int targetCdf[], int refrenceCdf[],  int map[]){
     int diff[LEVELS][LEVELS];
     for(int i_ref = 0; i_ref < LEVELS; i_ref++){
         for(int i_tar = 0; i_tar < LEVELS; i_tar++){
@@ -57,13 +57,13 @@ void calculateMap(int targetCdf[], int refrenceCdf[],  uchar map[]){
     }
 }
 
-void performMapping(uchar maps[][LEVELS], uchar targetImg[][CHANNELS], uchar resultImg[][CHANNELS], int width, int height){
+void performMapping(int maps[][LEVELS], uchar targetImg[][CHANNELS], uchar resultImg[][CHANNELS], int width, int height){
     int pixels = width * height;
     for (int i = 0; i < pixels; i++) {
         uchar *inRgbPixel = targetImg[i];
         uchar *outRgbPixel = resultImg[i];
         for (int j = 0; j < CHANNELS; j++){
-            uchar *mapChannel = maps[j];
+            int *mapChannel = maps[j];
             outRgbPixel[j] = mapChannel[inRgbPixel[j]];
         }
     }
@@ -72,7 +72,7 @@ void performMapping(uchar maps[][LEVELS], uchar targetImg[][CHANNELS], uchar res
 void cpu_process(uchar targetImg[][CHANNELS], uchar refrenceImg[][CHANNELS],  uchar outputImg[][CHANNELS], int width, int height) {
     int targetCdf[CHANNELS][LEVELS];
     int refrenceCdf[CHANNELS][LEVELS];
-    uchar maps[CHANNELS][LEVELS];
+    int maps[CHANNELS][LEVELS];
     int pixelCount = width * height;
     imgHistCdf(targetImg, pixelCount, targetCdf);
     imgHistCdf(refrenceImg, pixelCount, refrenceCdf);
@@ -80,7 +80,7 @@ void cpu_process(uchar targetImg[][CHANNELS], uchar refrenceImg[][CHANNELS],  uc
     for (int i = 0; i < CHANNELS; i++){
         int *refrencetChannelCdf = refrenceCdf[i];
         int *targetChannelCdf = targetCdf[i];
-        uchar *mapChannel = maps[i];
+        int *mapChannel = maps[i];
         calculateMap(targetChannelCdf, refrencetChannelCdf, mapChannel);
     }
 

@@ -1,5 +1,5 @@
 #include "ex1.h"
-
+using namespace std;
 __device__ void prefixSum(int arr[], int size, int tid, int threads) {
     int increment;
     if(tid >= size)
@@ -48,38 +48,137 @@ __device__ void argmin(int arr[], int len, int tid, int threads) {
 }
 
 __device__ void colorHist(uchar img[][CHANNELS], int histograms[][LEVELS]) {
+
+    const int pic_size = SIZE * SIZE;
+    auto hist_flat = (int*) histograms;
     const int tid = threadIdx.x;
     const int threads = blockDim.x;
-    const int pic_size = 3 * SIZE * SIZE;
-    for (int i = tid; i < pic_size; i+=threads) {
-        const int color = i%3;
-        const int pixel = i/3;
-        atomicAdd(&histograms[color][img[pixel][color]], 1);
+
+    __syncthreads();
+    for(int i = tid; i < 3*LEVELS; i+=threads) {
+        hist_flat[i] = 0;
     }
+    __syncthreads();
+
+    const int r = 0;
+    const int g = 1;
+    const int b = 2;
+    for (int i = tid; i < pic_size; i+=threads) {
+        atomicAdd(&histograms[r][img[i][r]], 1);
+        atomicAdd(&histograms[g][img[i][g]], 1);
+        atomicAdd(&histograms[b][img[i][b]], 1);
+    }
+    __syncthreads();
+
 }
 
-__device__ void performMapping(uchar maps[][LEVELS], uchar targetImg[][CHANNELS], uchar resultImg[][CHANNELS]){
+__device__ void performMapping(int maps[][LEVELS], uchar targetImg[][CHANNELS], uchar resultImg[][CHANNELS]){
+    int pixels = SIZE * SIZE;
+    const int tid = threadIdx.x;
+    const int threads = blockDim.x;
+    __syncthreads();
+    for (int i = tid; i < pixels; i+= threads) {
+        uchar *inRgbPixel = targetImg[i];
+        uchar *outRgbPixel = resultImg[i];
+        for (int j = 0; j < CHANNELS; j++){
+            int *mapChannel = maps[j];
+            outRgbPixel[j] = mapChannel[inRgbPixel[j]];
+        }
+    }    
+    __syncthreads();
+}
+__device__ void  create_map(int cdf_1[][LEVELS],int cdf_2[][LEVELS],int abs_cdf[][LEVELS]){
     int pixels = SIZE * SIZE;
     int tid = threadIdx.x;
     int threads = blockDim.x;
     for (int i = tid; i < pixels; i+=threads) {
-        uchar *inRgbPixel = targetImg[i];
-        uchar *outRgbPixel = resultImg[i];
         for (int j = 0; j < CHANNELS; j++){
-            uchar *mapChannel = maps[j];
-            outRgbPixel[j] = mapChannel[inRgbPixel[j]];
+            abs_cdf[j][i]=abs(cdf_1[j][i]-cdf_2[j][i]);
         }
-    }
+    }     
 }
+
 
 __global__
 void process_image_kernel(uchar *targets, uchar *refrences, uchar *results) {
-    // TODO
+    // TODO   
+    int tid = threadIdx.x;;
+    int threads = blockDim.x;
+    int img_size = CHANNELS*SIZE * SIZE;
+    
+    int abs_cdf[CHANNELS][LEVELS];
+    int hist_target[CHANNELS][LEVELS];
+    int hist_refrence[CHANNELS][LEVELS];
+   
+    uchar (*target)[CHANNELS] = (uchar(*)[CHANNELS]) targets;
+    uchar (*refrence)[CHANNELS] = (uchar(*)[CHANNELS]) refrences;
+    uchar (*result)[CHANNELS] = (uchar(*)[CHANNELS]) results;
+     //find hist of images
+    __shared__ int histogramsShared_target[CHANNELS][LEVELS];
+    __shared__ int histogramsShared_refrence[CHANNELS][LEVELS];
+
+    if(tid==0)
+        printf("printf working:%d\n",5);
+       
+    __syncthreads(); 
+    
+
+    colorHist(target, histogramsShared_target);
+    
+    __syncthreads();    
+
+     colorHist(refrence, histogramsShared_refrence);
+
+    __syncthreads();
+    if(tid==0)
+        printf("colorHist_sample:%d",histogramsShared_refrence[0][0]);
+    //find prefix
+    for(int i=0;i<CHANNELS;i++)
+    {   
+        prefixSum(histogramsShared_target[i], LEVELS, threadIdx.x, blockDim.x);
+        __syncthreads();
+
+        prefixSum(histogramsShared_refrence[i], LEVELS, threadIdx.x, blockDim.x);
+        __syncthreads();
+
+         for(int i = tid; i < CHANNELS * LEVELS; i+=threads){
+            ((int*)hist_target)[i] = ((int*)histogramsShared_target)[i];
+            __syncthreads();
+            ((int*)hist_refrence)[i] = ((int*)histogramsShared_refrence)[i];
+            __syncthreads();
+        }
+    }
+    //Create Map
+    create_map(hist_target,hist_refrence,abs_cdf);
+    __syncthreads();
+    if(tid==0)
+        printf("colorHist_sample:%d",abs_cdf[0][0]);
+
+    //argmin
+     for(int i=0;i<CHANNELS;i++)
+    {
+       argmin(abs_cdf[i], LEVELS, threadIdx.x, blockDim.x);
+       __syncthreads();
+    }
+    
+
+    //Preform Map
+    performMapping(abs_cdf, target, result);
+    __syncthreads();
+    
+    for (int i = tid; i < img_size; i+=threads) {
+            results[i]=((uchar*)result)[i];
+        }  
 }
+
+
+
+
 
 /* Task serial context struct with necessary CPU / GPU pointers to process a single image */
 struct task_serial_context {
     // TODO define task serial memory buffers
+    uchar *target_single=nullptr,*refrence_single=nullptr,*result_single=nullptr;
 };
 
 /* Allocate GPU memory for a single input image and a single output image.
@@ -89,7 +188,9 @@ struct task_serial_context* task_serial_init()
 {
     auto context = new task_serial_context;
     //TODO: allocate GPU memory for a single input image and a single output image
-
+    cudaMalloc((void**)context->target_single,SIZE*SIZE*LEVELS); 
+    cudaMalloc((void**)context->refrence_single,SIZE*SIZE*LEVELS); 
+    cudaMalloc((void**)context->result_single,SIZE*SIZE*LEVELS); 
     return context;
 }
 
@@ -101,6 +202,15 @@ void task_serial_process(struct task_serial_context *context, uchar *images_targ
     //   1. copy the relevant image from images_in to the GPU memory you allocated
     //   2. invoke GPU kernel on this image
     //   3. copy output from GPU memory to relevant location in images_out_gpu_serial
+    int size_img = sizeof(uchar)*LEVELS*SIZE*SIZE;
+    for (int i = 0; i < 5; i++)
+    {
+        //printf("%d,",i);
+        cudaMemcpy(context->target_single,images_target+(i*(size_img)),size_img,cudaMemcpyHostToDevice);
+        cudaMemcpy(context->refrence_single,images_refrence+(i*(size_img)),size_img,cudaMemcpyHostToDevice);
+        process_image_kernel<<<1,1024>>>(context->target_single,context->refrence_single,context->result_single);
+        cudaMemcpy(images_result+(i*(size_img)),context->result_single,size_img,cudaMemcpyDeviceToHost);
+    }    
 
 }
 
@@ -108,7 +218,9 @@ void task_serial_process(struct task_serial_context *context, uchar *images_targ
 void task_serial_free(struct task_serial_context *context)
 {
     //TODO: free resources allocated in task_serial_init
-
+    cudaFree((void**)context->refrence_single);
+    cudaFree((void**)context->target_single);
+    cudaFree((void**)context->result_single);
     free(context);
 }
 
@@ -142,7 +254,6 @@ void gpu_bulk_process(struct gpu_bulk_context *context, uchar *images_target, uc
 void gpu_bulk_free(struct gpu_bulk_context *context)
 {
     //TODO: free resources allocated in gpu_bulk_init
-
     free(context);
 }
 
@@ -156,22 +267,14 @@ __global__ void argminWrapper(int arr[], int size){
 }
 
 __global__ void colorHistWrapper(uchar img[][CHANNELS], int histograms[][LEVELS]){
-    __shared__ int histogramsShared[CHANNELS][LEVELS];
-
-    const int tid = threadIdx.x;;
-    const int threads = blockDim.x;
-
-    for(int i = tid; i < CHANNELS * LEVELS; i+=threads){
-        ((int*)histograms)[i] = 0;
-    }
-
-    __syncthreads();
+    __shared__ int histogramsShared[CHANNELS][LEVELS];    
+    int tid = threadIdx.x;
+    int threads = blockDim.x;
     colorHist(img, histogramsShared);
-    __syncthreads();
-
     for(int i = tid; i < CHANNELS * LEVELS; i+=threads){
         ((int*)histograms)[i] = ((int*)histogramsShared)[i];
     }
+    __syncthreads();
 
 }
 
@@ -185,17 +288,16 @@ __global__ void prefixSumWrapper(int arr[], int size){
     }
 
     __syncthreads();
-    prefixSum(arrShared, size, threadIdx.x, blockDim.x);
-    __syncthreads();
 
+    prefixSum(arrShared, size, threadIdx.x, blockDim.x);
+    
     for(int i=tid; i<size; i+=threads){
         arr[i] = arrShared[i];
     }
 
+    __syncthreads();
 }
 
-__global__ void performMappingWrapper(uchar maps[][LEVELS], uchar targetImg[][CHANNELS], uchar resultImg[][CHANNELS]){
+__global__ void performMappingWrapper(int maps[][LEVELS], uchar targetImg[][CHANNELS], uchar resultImg[][CHANNELS]){
     performMapping(maps, targetImg, resultImg);
-    
-
 }
