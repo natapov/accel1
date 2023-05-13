@@ -18,7 +18,8 @@ __device__ void prefixSum(int arr[], int size, int tid, int threads) {
 }
 
 __device__ void argmin(int arr[], int len, int tid, int threads) {
-    int halfLen = len / 2;    assert(threads == halfLen);
+    int halfLen = len / 2;    
+    assert(threads == halfLen);
     assert(tid < threads);
     bool firstIteration = true;
     int prevHalfLength = 0;
@@ -161,9 +162,11 @@ void process_image_kernel(uchar *targets, uchar *refrences, uchar *results) {
         printf("colorHist_sample:%d",abs_cdf[0][0]);
 
     //argmin
-     for(int i=0;i<CHANNELS;i++) {
-       argmin(abs_cdf[i], LEVELS, threadIdx.x, blockDim.x);
-       __syncthreads();
+    for(int i=0;i<CHANNELS;i++) {
+        if (tid < LEVELS / 2) {
+            argmin(abs_cdf[i], LEVELS, tid, LEVELS / 2);
+        }
+        __syncthreads();
     }
     
 
