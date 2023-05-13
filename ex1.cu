@@ -18,8 +18,8 @@ __device__ void prefixSum(int arr[], int size, int tid, int threads) {
 }
 
 __device__ void argmin(int arr[], int len, int tid, int threads) {
-    assert(threads == len / 2);
-    int halfLen = len / 2;
+    int halfLen = len / 2;    assert(threads == halfLen);
+    assert(tid < threads);
     bool firstIteration = true;
     int prevHalfLength = 0;
     while (halfLen > 0) {
@@ -96,12 +96,11 @@ __device__ void performMapping(int maps[][LEVELS], uchar targetImg[][CHANNELS], 
     __syncthreads();
 }
 __device__ void  create_map(int cdf_1[][LEVELS],int cdf_2[][LEVELS],int abs_cdf[][LEVELS]){
-    int pixels = SIZE * SIZE;
     int tid = threadIdx.x;
     int threads = blockDim.x;
-    for (int i = tid; i < pixels; i+=threads) {
+    for (int i = tid; i < LEVELS; i+=threads) {
         for (int j = 0; j < CHANNELS; j++){
-            abs_cdf[j][i]=abs(cdf_1[j][i]-cdf_2[j][i]);
+            abs_cdf[j][i] = abs(cdf_1[j][i]-cdf_2[j][i]);
         }
     }     
 }
@@ -162,8 +161,7 @@ void process_image_kernel(uchar *targets, uchar *refrences, uchar *results) {
         printf("colorHist_sample:%d",abs_cdf[0][0]);
 
     //argmin
-     for(int i=0;i<CHANNELS;i++)
-    {
+     for(int i=0;i<CHANNELS;i++) {
        argmin(abs_cdf[i], LEVELS, threadIdx.x, blockDim.x);
        __syncthreads();
     }
