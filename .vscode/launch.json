@@ -9,6 +9,7 @@
             "type": "cuda-gdb",
             "request": "launch",
             "program": "${workspaceFolder}/ex1",
+            "preLaunchTask": "make",
             //"initCommands": ["set cuda api_failures stop"]
 
         },        
@@ -26,6 +27,7 @@
             "type": "cuda-gdb",
             "request": "launch",
             "program": "${workspaceFolder}/image",
+            "preLaunchTask": "make",
             "args": "images/target.bmp images/refrence.bmp"
             //"initCommands": ["set cuda api_failures stop"]
 

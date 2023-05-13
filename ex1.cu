@@ -63,6 +63,7 @@ __device__ void colorHist(uchar img[][CHANNELS], int histograms[][LEVELS]) {
     for (int i = tid; i < 3*pic_size; i+=threads) {
         const int color = i%3;
         const int pixel = i/3;
+        assert(pixel < pic_size);
         atomicAdd(&histograms[color][img[pixel][color]], 1);
     }    
     // old version
@@ -117,9 +118,9 @@ void process_image_kernel(uchar *targets, uchar *refrences, uchar *results) {
     int hist_target[CHANNELS][LEVELS];
     int hist_refrence[CHANNELS][LEVELS];
    
-    uchar (*target)[CHANNELS] = (uchar(*)[CHANNELS]) targets;
-    uchar (*refrence)[CHANNELS] = (uchar(*)[CHANNELS]) refrences;
-    uchar (*result)[CHANNELS] = (uchar(*)[CHANNELS]) results;
+    auto target = (uchar(*)[CHANNELS]) targets;
+    auto refrence = (uchar(*)[CHANNELS]) refrences;
+    auto result = (uchar(*)[CHANNELS]) results;
      //find hist of images
     __shared__ int histogramsShared_target[CHANNELS][LEVELS];
     __shared__ int histogramsShared_refrence[CHANNELS][LEVELS];
@@ -129,12 +130,11 @@ void process_image_kernel(uchar *targets, uchar *refrences, uchar *results) {
        
     __syncthreads(); 
     
-
     colorHist(target, histogramsShared_target);
     
     __syncthreads();    
 
-     colorHist(refrence, histogramsShared_refrence);
+    colorHist(refrence, histogramsShared_refrence);
 
     __syncthreads();
     if(tid==0)
@@ -181,8 +181,9 @@ void process_image_kernel(uchar *targets, uchar *refrences, uchar *results) {
 
 /* Task serial context struct with necessary CPU / GPU pointers to process a single image */
 struct task_serial_context {
-    // TODO define task serial memory buffers
-    uchar *target_single=nullptr,*refrence_single=nullptr,*result_single=nullptr;
+    uchar *target_single   = nullptr;
+    uchar *refrence_single = nullptr;
+    uchar *result_single   = nullptr;
 };
 
 /* Allocate GPU memory for a single input image and a single output image.
@@ -192,9 +193,9 @@ struct task_serial_context* task_serial_init()
 {
     auto context = new task_serial_context;
     //TODO: allocate GPU memory for a single input image and a single output image
-    cudaMalloc((void**)context->target_single,SIZE*SIZE*LEVELS); 
-    cudaMalloc((void**)context->refrence_single,SIZE*SIZE*LEVELS); 
-    cudaMalloc((void**)context->result_single,SIZE*SIZE*LEVELS); 
+    CUDA_CHECK( cudaMalloc((void**)&context->target_single,SIZE*SIZE*LEVELS) ); 
+    CUDA_CHECK( cudaMalloc((void**)&context->refrence_single,SIZE*SIZE*LEVELS) ); 
+    CUDA_CHECK( cudaMalloc((void**)&context->result_single,SIZE*SIZE*LEVELS) ); 
     return context;
 }
 
@@ -210,10 +211,10 @@ void task_serial_process(struct task_serial_context *context, uchar *images_targ
     for (int i = 0; i < 5; i++)
     {
         //printf("%d,",i);
-        cudaMemcpy(context->target_single,images_target+(i*(size_img)),size_img,cudaMemcpyHostToDevice);
-        cudaMemcpy(context->refrence_single,images_refrence+(i*(size_img)),size_img,cudaMemcpyHostToDevice);
+        CUDA_CHECK( cudaMemcpy(context->target_single,images_target+(i*(size_img)),size_img,cudaMemcpyHostToDevice) );
+        CUDA_CHECK( cudaMemcpy(context->refrence_single,images_refrence+(i*(size_img)),size_img,cudaMemcpyHostToDevice) );
         process_image_kernel<<<1,1024>>>(context->target_single,context->refrence_single,context->result_single);
-        cudaMemcpy(images_result+(i*(size_img)),context->result_single,size_img,cudaMemcpyDeviceToHost);
+        CUDA_CHECK( cudaMemcpy(images_result+(i*(size_img)),context->result_single,size_img,cudaMemcpyDeviceToHost) );
     }    
 
 }
@@ -221,7 +222,6 @@ void task_serial_process(struct task_serial_context *context, uchar *images_targ
 /* Release allocated resources for the task-serial implementation. */
 void task_serial_free(struct task_serial_context *context)
 {
-    //TODO: free resources allocated in task_serial_init
     cudaFree((void**)context->refrence_single);
     cudaFree((void**)context->target_single);
     cudaFree((void**)context->result_single);
