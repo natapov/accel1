@@ -63,7 +63,7 @@ void gpu_bulk_free(struct gpu_bulk_context *context);
     void performMapping(int maps[][LEVELS], uchar targetImg[][CHANNELS], uchar resultImg[][CHANNELS], int width, int height);
     __global__ void performMappingWrapper(int maps[][LEVELS], uchar targetImg[][CHANNELS], uchar resultImg[][CHANNELS]);
 
-    void create_map(int cdf_1[][LEVELS],int cdf_2[][LEVELS],int abs_cdf[][LEVELS]);
+    __device__ void create_map(int cdf_1[][LEVELS],int cdf_2[][LEVELS],int abs_cdf[][LEVELS]);
     
 #endif
 
