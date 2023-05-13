@@ -60,14 +60,21 @@ __device__ void colorHist(uchar img[][CHANNELS], int histograms[][LEVELS]) {
     }
     __syncthreads();
 
-    const int r = 0;
-    const int g = 1;
-    const int b = 2;
-    for (int i = tid; i < pic_size; i+=threads) {
-        atomicAdd(&histograms[r][img[i][r]], 1);
-        atomicAdd(&histograms[g][img[i][g]], 1);
-        atomicAdd(&histograms[b][img[i][b]], 1);
-    }
+    for (int i = tid; i < 3*pic_size; i+=threads) {
+        const int color = i%3;
+        const int pixel = i/3;
+        atomicAdd(&histograms[color][img[pixel][color]], 1);
+    }    
+    // old version
+    // {
+    // const int r = 0;
+    // const int g = 1;
+    // const int b = 2;
+    // for (int i = tid; i < pic_size; i+=threads) {
+    //     atomicAdd(&histograms[r][img[i][r]], 1);
+    //     atomicAdd(&histograms[g][img[i][g]], 1);
+    //     atomicAdd(&histograms[b][img[i][b]], 1);
+    // }
     __syncthreads();
 
 }
@@ -170,9 +177,6 @@ void process_image_kernel(uchar *targets, uchar *refrences, uchar *results) {
             results[i]=((uchar*)result)[i];
         }  
 }
-
-
-
 
 
 /* Task serial context struct with necessary CPU / GPU pointers to process a single image */
