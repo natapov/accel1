@@ -99,11 +99,39 @@ __device__ void performMapping(int maps[][LEVELS], uchar targetImg[][CHANNELS], 
 __device__ void  create_map(int cdf_1[][LEVELS],int cdf_2[][LEVELS],int abs_cdf[][LEVELS]){
     int tid = threadIdx.x;
     int threads = blockDim.x;
+    __syncthreads();
     for (int i = tid; i < LEVELS; i+=threads) {
         for (int j = 0; j < CHANNELS; j++){
             abs_cdf[j][i] = abs(cdf_1[j][i]-cdf_2[j][i]);
         }
     }     
+    __syncthreads();
+}
+
+__device__
+int argmin_cpu(int arr[], int size){
+    int argmin = -1;
+    int min = INT_MAX;
+    for(int i = 0; i < size; i++){
+        if (arr[i] < min){
+            min = arr[i];
+            argmin = i;
+        }
+    }
+    return argmin;
+}
+
+__device__
+void performMapping_cpu(int maps[][LEVELS], uchar targetImg[][CHANNELS], uchar resultImg[][CHANNELS]){
+    int pixels = SIZE * SIZE;
+    for (int i = 0; i < pixels; i++) {
+        uchar *inRgbPixel = targetImg[i];
+        uchar *outRgbPixel = resultImg[i];
+        for (int j = 0; j < CHANNELS; j++){
+            int *mapChannel = maps[j];
+            outRgbPixel[j] = mapChannel[inRgbPixel[j]];
+        }
+    }
 }
 
 
@@ -112,7 +140,7 @@ void process_image_kernel(uchar *targets, uchar *refrences, uchar *results) {
     // TODO   
     int tid = threadIdx.x;;
     int threads = blockDim.x;
-    int img_size = CHANNELS*SIZE * SIZE;
+    //int img_size = CHANNELS*SIZE * SIZE;
     
     int abs_cdf[CHANNELS][LEVELS];
     int hist_target[CHANNELS][LEVELS];
@@ -125,9 +153,6 @@ void process_image_kernel(uchar *targets, uchar *refrences, uchar *results) {
     __shared__ int histogramsShared_target[CHANNELS][LEVELS];
     __shared__ int histogramsShared_refrence[CHANNELS][LEVELS];
 
-    if(tid==0)
-        printf("printf working:%d\n",5);
-       
     __syncthreads(); 
     
     colorHist(target, histogramsShared_target);
@@ -137,9 +162,7 @@ void process_image_kernel(uchar *targets, uchar *refrences, uchar *results) {
     colorHist(refrence, histogramsShared_refrence);
 
     __syncthreads();
-    if(tid==0)
-        printf("colorHist_sample:%d",histogramsShared_refrence[0][0]);
-    //find prefix
+
     for(int i=0;i<CHANNELS;i++)
     {   
         prefixSum(histogramsShared_target[i], LEVELS, threadIdx.x, blockDim.x);
@@ -148,7 +171,7 @@ void process_image_kernel(uchar *targets, uchar *refrences, uchar *results) {
         prefixSum(histogramsShared_refrence[i], LEVELS, threadIdx.x, blockDim.x);
         __syncthreads();
 
-         for(int i = tid; i < CHANNELS * LEVELS; i+=threads){
+        for(int i = tid; i < CHANNELS * LEVELS; i+=threads){
             ((int*)hist_target)[i] = ((int*)histogramsShared_target)[i];
             __syncthreads();
             ((int*)hist_refrence)[i] = ((int*)histogramsShared_refrence)[i];
@@ -156,27 +179,33 @@ void process_image_kernel(uchar *targets, uchar *refrences, uchar *results) {
         }
     }
     //Create Map
-    create_map(hist_target,hist_refrence,abs_cdf);
-    __syncthreads();
-    if(tid==0)
-        printf("colorHist_sample:%d",abs_cdf[0][0]);
+    create_map(hist_target, hist_refrence, abs_cdf);
 
+    __syncthreads();
     //argmin
-    for(int i=0;i<CHANNELS;i++) {
-        if (tid < LEVELS / 2) {
-            argmin(abs_cdf[i], LEVELS, tid, LEVELS / 2);
+    for(int i=0;i<CHANNELS;i++) {//i'm not sure
+        // if (tid < LEVELS / 2) {
+        //     argmin(abs_cdf[i], LEVELS, tid, LEVELS / 2);
+        // }
+        if (tid == 0) { //for debugging
+            argmin_cpu(abs_cdf[i], LEVELS);
         }
-        __syncthreads();
     }
+    __syncthreads();
+    // for (int i = tid; i < LEVELS; i+=threads) {
+    //     printf(" %d --- %d \n", i, (int) abs_cdf[0][i]);
+    // }
     
 
     //Preform Map
     performMapping(abs_cdf, target, result);
     __syncthreads();
+
+    for (int i = tid; i < LEVELS; i+=threads) {
+        printf(" %d --- %d \n", i, (int) result[i][0]);
+    }
     
-    for (int i = tid; i < img_size; i+=threads) {
-            results[i]=((uchar*)result)[i];
-        }  
+    __syncthreads();  
 }
 
 
@@ -211,11 +240,10 @@ void task_serial_process(struct task_serial_context *context, uchar *images_targ
     int size_img = sizeof(uchar)*LEVELS*SIZE*SIZE;
     for (int i = 0; i < 5; i++)
     {
-        //printf("%d,",i);
-        CUDA_CHECK( cudaMemcpy(context->target_single,images_target+(i*(size_img)),size_img,cudaMemcpyHostToDevice) );
-        CUDA_CHECK( cudaMemcpy(context->refrence_single,images_refrence+(i*(size_img)),size_img,cudaMemcpyHostToDevice) );
-        process_image_kernel<<<1,1024>>>(context->target_single,context->refrence_single,context->result_single);
-        CUDA_CHECK( cudaMemcpy(images_result+(i*(size_img)),context->result_single,size_img,cudaMemcpyDeviceToHost) );
+        CUDA_CHECK( cudaMemcpy(context->target_single,  images_target  +(i*(size_img)), size_img, cudaMemcpyHostToDevice) );
+        CUDA_CHECK( cudaMemcpy(context->refrence_single,images_refrence+(i*(size_img)), size_img, cudaMemcpyHostToDevice) );
+        process_image_kernel<<<1,1024>>>(context->target_single, context->refrence_single, context->result_single);
+        CUDA_CHECK( cudaMemcpy(images_result+(i*(size_img)), context->result_single, size_img, cudaMemcpyDeviceToHost) );
     }    
 
 }
