@@ -66,22 +66,12 @@ __device__ void colorHist(uchar img[][CHANNELS], int histograms[][LEVELS]) {
         const int pixel = i/3;
         assert(pixel < pic_size);
         atomicAdd(&histograms[color][img[pixel][color]], 1);
-    }    
-    // old version
-    // {
-    // const int r = 0;
-    // const int g = 1;
-    // const int b = 2;
-    // for (int i = tid; i < pic_size; i+=threads) {
-    //     atomicAdd(&histograms[r][img[i][r]], 1);
-    //     atomicAdd(&histograms[g][img[i][g]], 1);
-    //     atomicAdd(&histograms[b][img[i][b]], 1);
-    // }
+    }
     __syncthreads();
 
 }
 
-__device__ void performMapping(int maps[][LEVELS], uchar targetImg[][CHANNELS], uchar resultImg[][CHANNELS]){
+__device__ void performMapping(uchar maps[][LEVELS], uchar targetImg[][CHANNELS], uchar resultImg[][CHANNELS]){
     int pixels = SIZE * SIZE;
     const int tid = threadIdx.x;
     const int threads = blockDim.x;
@@ -90,13 +80,13 @@ __device__ void performMapping(int maps[][LEVELS], uchar targetImg[][CHANNELS], 
         uchar *inRgbPixel = targetImg[i];
         uchar *outRgbPixel = resultImg[i];
         for (int j = 0; j < CHANNELS; j++){
-            int *mapChannel = maps[j];
+            uchar *mapChannel = maps[j];
             outRgbPixel[j] = mapChannel[inRgbPixel[j]];
         }
     }    
     __syncthreads();
 }
-__device__ void  create_map(int cdf_1[][LEVELS],int cdf_2[][LEVELS],int abs_cdf[][LEVELS]){
+__device__ void  create_map(uchar cdf_1[][LEVELS],uchar cdf_2[][LEVELS],uchar abs_cdf[][LEVELS]){
     int tid = threadIdx.x;
     int threads = blockDim.x;
     __syncthreads();
@@ -109,7 +99,7 @@ __device__ void  create_map(int cdf_1[][LEVELS],int cdf_2[][LEVELS],int abs_cdf[
 }
 
 __device__
-int argmin_cpu(int arr[], int size){
+int argmin_cpu(uchar arr[], int size){
     int argmin = -1;
     int min = INT_MAX;
     for(int i = 0; i < size; i++){
@@ -122,30 +112,41 @@ int argmin_cpu(int arr[], int size){
 }
 
 __device__
-void performMapping_cpu(int maps[][LEVELS], uchar targetImg[][CHANNELS], uchar resultImg[][CHANNELS]){
-    int pixels = SIZE * SIZE;
+void performMapping_cpu(uchar maps[][LEVELS], uchar targetImg[][CHANNELS], uchar resultImg[][CHANNELS]){
+    const int pixels = SIZE * SIZE;
     for (int i = 0; i < pixels; i++) {
         uchar *inRgbPixel = targetImg[i];
         uchar *outRgbPixel = resultImg[i];
         for (int j = 0; j < CHANNELS; j++){
-            int *mapChannel = maps[j];
+            uchar *mapChannel = maps[j];
             outRgbPixel[j] = mapChannel[inRgbPixel[j]];
         }
     }
 }
-
+__device__ 
+void normalize_and_copy(int input[][LEVELS], uchar output[][LEVELS]) {
+    const int tid = threadIdx.x;;
+    const int threads = blockDim.x;
+    for(int j = 0; j < CHANNELS; j++) {
+        const int max = input[j][LEVELS -1];
+        for(int i = tid; i < LEVELS; i+= threads) {
+            output[j][i] = (uchar) ((input[j][i]*256)/max);
+        }
+    }
+}
 
 __global__
 void process_image_kernel(uchar *targets, uchar *refrences, uchar *results) {
     // TODO   
     int tid = threadIdx.x;;
     int threads = blockDim.x;
-    //int img_size = CHANNELS*SIZE * SIZE;
     
-    int abs_cdf[CHANNELS][LEVELS];
-    int hist_target[CHANNELS][LEVELS];
-    int hist_refrence[CHANNELS][LEVELS];
+    uchar abs_cdf[CHANNELS][LEVELS];
+    uchar hist_target_normalized[CHANNELS][LEVELS];
+    uchar hist_refrence_normalized[CHANNELS][LEVELS];
    
+
+
     auto target = (uchar(*)[CHANNELS]) targets;
     auto refrence = (uchar(*)[CHANNELS]) refrences;
     auto result = (uchar(*)[CHANNELS]) results;
@@ -163,23 +164,19 @@ void process_image_kernel(uchar *targets, uchar *refrences, uchar *results) {
 
     __syncthreads();
 
-    for(int i=0;i<CHANNELS;i++)
-    {   
+    for(int i=0;i<CHANNELS;i++) {   
         prefixSum(histogramsShared_target[i], LEVELS, threadIdx.x, blockDim.x);
         __syncthreads();
 
         prefixSum(histogramsShared_refrence[i], LEVELS, threadIdx.x, blockDim.x);
         __syncthreads();
-
-        for(int i = tid; i < CHANNELS * LEVELS; i+=threads){
-            ((int*)hist_target)[i] = ((int*)histogramsShared_target)[i];
-            __syncthreads();
-            ((int*)hist_refrence)[i] = ((int*)histogramsShared_refrence)[i];
-            __syncthreads();
-        }
     }
+    normalize_and_copy(histogramsShared_refrence, hist_refrence_normalized);
+    normalize_and_copy(histogramsShared_target  , hist_target_normalized);
+    __syncthreads();
+    
     //Create Map
-    create_map(hist_target, hist_refrence, abs_cdf);
+    create_map(hist_target_normalized, hist_refrence_normalized, abs_cdf);
 
     __syncthreads();
     //argmin
@@ -331,6 +328,6 @@ __global__ void prefixSumWrapper(int arr[], int size){
     __syncthreads();
 }
 
-__global__ void performMappingWrapper(int maps[][LEVELS], uchar targetImg[][CHANNELS], uchar resultImg[][CHANNELS]){
+__global__ void performMappingWrapper(uchar maps[][LEVELS], uchar targetImg[][CHANNELS], uchar resultImg[][CHANNELS]){
     performMapping(maps, targetImg, resultImg);
 }
