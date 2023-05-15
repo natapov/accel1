@@ -28,6 +28,7 @@ long long int distance_sqr_between_image_arrays(uchar *img_arr1, uchar *img_arr2
 }
 
 
+
 int main() {
     uchar *images_target;
     uchar *images_refrence;
@@ -37,7 +38,7 @@ int main() {
     int devices;
     CUDA_CHECK( cudaGetDeviceCount(&devices) );
     printf("Number of devices: %d\n", devices);
-    
+
     CUDA_CHECK( cudaHostAlloc(&images_target, N_IMAGES * SIZE * SIZE * CHANNELS, 0) );
     CUDA_CHECK( cudaHostAlloc(&images_refrence, N_IMAGES * SIZE * SIZE * CHANNELS, 0) );
     CUDA_CHECK( cudaHostAlloc(&images_out_cpu, N_IMAGES * SIZE * SIZE * CHANNELS, 0) );
@@ -70,6 +71,7 @@ int main() {
 
     // GPU task serial computation
     printf("\n=== GPU Task Serial ===\n");
+
     struct task_serial_context *ts_context = task_serial_init();
     
     CUDA_CHECK(cudaDeviceSynchronize());

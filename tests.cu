@@ -60,7 +60,7 @@ TEST_F(Hw1, ColorHistogram)
         randomizeImage(imgBuf);
         auto img = (uchar(*)[CHANNELS]) imgBuf;
         colorHist(img, SIZE * SIZE, cpuHistograms);
-        colorHistWrapper<<<1, 1024>>>(img, gpuHistograms);
+        colorHistWrapper<<<1, 64>>>(img, gpuHistograms);
         cudaDeviceSynchronize();
         // if (i == 0) {
         //     for(int l = 0; l<3; l++){
@@ -90,7 +90,7 @@ TEST_F(Hw1, PrefixSum)
         randomizeArray<int>(hist, LEVELS, SIZE * SIZE);
         memcpy(gpuOut, hist, sizeof(int) * LEVELS);
         prefixSum(hist, LEVELS, cpuOut);
-        prefixSumWrapper<<<1, 1024>>>(gpuOut, LEVELS);
+        prefixSumWrapper<<<1, 64>>>(gpuOut, LEVELS);
         cudaDeviceSynchronize();
         for (int j = 0; j < LEVELS; j++)
         {
@@ -117,7 +117,7 @@ TEST_F(Hw1, Mapping)
         auto maps = (int(*)[LEVELS])mapsBuf;
         uchar (*targetImg)[CHANNELS] = (uchar(*)[CHANNELS])targetImgBuf;
         performMapping(maps, targetImg, cpuResult, SIZE, SIZE);
-        performMappingWrapper<<<1, 1024>>>(maps, targetImg, gpuResult);
+        performMappingWrapper<<<1, 128>>>(maps, targetImg, gpuResult);
         cudaDeviceSynchronize();
 
         for (int j = 0; j < SIZE * SIZE; j++){
