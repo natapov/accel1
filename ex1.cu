@@ -1,32 +1,22 @@
 #include "ex1.h"
 using namespace std;
 __device__ void prefixSum(int arr[], int size, int tid, int threads) {
-    // int increment;
-    // if(tid >= size)
-    //     return;
-    // for (int stride = 1; stride<size; stride*=2) {
-    //     if (tid >= stride) {
-    //         increment = arr[tid - stride];
-    //     }
-    //     __syncthreads();
-    //     if (tid >= stride) {
-    //         arr[tid] += increment;
-    //     }
-    //     __syncthreads();
-    // }
-
-    if(tid == 0 ) {
-        for (int i = 1; i < size; i++) {
-            arr[i] += arr[i-1];
+    int increment;
+    const auto is_active = tid < size;
+    for (int stride = 1; stride<size; stride*=2) {
+        if (tid >= stride && is_active) {
+            increment = arr[tid - stride];
         }
+        __syncthreads();
+        if (tid >= stride && is_active) {
+            arr[tid] += increment;
+        }
+        __syncthreads();
     }
-    __syncthreads();
 }
 
 __device__ void argmin(int arr[], int len, int tid, int threads) {
     int halfLen = len / 2;
-    assert(threads == halfLen);
-    assert(tid < threads);
     bool firstIteration = true;
     int prevHalfLength = 0;
     while (halfLen > 0) {
@@ -96,18 +86,10 @@ __global__
 void process_image_kernel(uchar *targets, uchar *refrences, uchar *results) {
     int tid = threadIdx.x;;
     int threads = blockDim.x;
-
     __shared__ int deleta_cdf_row[LEVELS];
     __shared__ int map_cdf[CHANNELS][LEVELS];
     __shared__ int histogramsShared_target[CHANNELS][LEVELS];
     __shared__ int histogramsShared_refrence[CHANNELS][LEVELS];
-    // zero_array((int*) deleta_cdf_row, LEVELS);
-    // zero_array((int*) map_cdf, CHANNELS*LEVELS);
-    // zero_array((int*) histogramsShared_target, CHANNELS*LEVELS);
-    // zero_array((int*) histogramsShared_target, CHANNELS*LEVELS);
-
-    __syncthreads();
-
     auto target   = (uchar(*)[CHANNELS]) targets;
     auto refrence = (uchar(*)[CHANNELS]) refrences;
     auto result   = (uchar(*)[CHANNELS]) results;
@@ -119,10 +101,7 @@ void process_image_kernel(uchar *targets, uchar *refrences, uchar *results) {
     for(int c=0; c < CHANNELS; c++)
     {   
         prefixSum(histogramsShared_target[c],LEVELS, threadIdx.x, blockDim.x);
-        __syncthreads();
-
         prefixSum(histogramsShared_refrence[c], LEVELS, threadIdx.x, blockDim.x);
-        
         __syncthreads();
 
         for (int i = 0; i < LEVELS; i+=1) {
@@ -173,7 +152,7 @@ void task_serial_process(struct task_serial_context *context, uchar *images_targ
     const int size_img = LEVELS*SIZE*SIZE;
     CUDA_CHECK( cudaMemcpy(context->target_single,  images_target  , size_img, cudaMemcpyHostToDevice) );
     CUDA_CHECK( cudaMemcpy(context->refrence_single,images_refrence, size_img, cudaMemcpyHostToDevice) );
-    process_image_kernel<<<1,LEVELS/2>>>(context->target_single, context->refrence_single, context->result_single);
+    process_image_kernel<<<1,256>>>(context->target_single, context->refrence_single, context->result_single);
     CUDA_CHECK( cudaMemcpy(images_result, context->result_single, size_img, cudaMemcpyDeviceToHost) );
 
 }
