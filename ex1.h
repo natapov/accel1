@@ -60,14 +60,8 @@ void gpu_bulk_free(struct gpu_bulk_context *context);
     void prefixSum(int arr[], int size, int res[]);
     __global__ void prefixSumWrapper(int arr[], int size);
     
-    void performMapping(uchar maps[][LEVELS], uchar targetImg[][CHANNELS], uchar resultImg[][CHANNELS], int width, int height);
-    
-    
-    //void performMapping(uchar maps[][LEVELS], uchar targetImg[][CHANNELS], uchar resultImg[][CHANNELS]);
-
-    __global__ void performMappingWrapper(uchar maps[][LEVELS], uchar targetImg[][CHANNELS], uchar resultImg[][CHANNELS]);
-
-    __device__ void create_map(uchar cdf_1[][LEVELS],uchar cdf_2[][LEVELS],uchar abs_cdf[][LEVELS]);
+    void performMapping(int maps[][LEVELS], uchar targetImg[][CHANNELS], uchar resultImg[][CHANNELS], int width, int height);
+    __global__ void performMappingWrapper(int maps[][LEVELS], uchar targetImg[][CHANNELS], uchar resultImg[][CHANNELS]);
     
 #endif
 

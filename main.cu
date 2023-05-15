@@ -10,19 +10,25 @@
 long long int distance_sqr_between_image_arrays(uchar *img_arr1, uchar *img_arr2) {
     long long int distance_sqr = 0;
     bool foundMistake = false;
+    int yes = 0;
+    int no  = 0;
     for (int i = 0; i < 1 * CHANNELS * SIZE * SIZE; i++) {
         distance_sqr += SQR(img_arr1[i] - img_arr2[i]);
         if(!foundMistake && (img_arr1[i] - img_arr2[i] != 0)){
             printf("%d: %d - %d = %d\n",i, img_arr1[i], img_arr2[i],  img_arr1[i] - img_arr2[i]);
-            foundMistake = true;
+            foundMistake = false;
+            no++;
+        }
+        else {
+            yes++;
         }
     }
+    printf("Correct: %d, incorrect: %d\n", yes, no);
     return distance_sqr;
 }
 
 
 int main() {
-    printf("##$#!!!run main !!!\n");
     uchar *images_target;
     uchar *images_refrence;
     uchar *images_out_cpu; //output of CPU computation. In CPU memory.
@@ -70,6 +76,12 @@ int main() {
     t_start = get_time_msec();
     task_serial_process(ts_context, images_target, images_refrence, images_out_gpu_serial);
     cudaDeviceSynchronize();
+    cudaError_t error=cudaGetLastError();
+    if (error!=cudaSuccess) 
+    {
+        fprintf(stderr,"Kernel execution failed:%s\n",cudaGetErrorString(error));
+        return 1;
+    }
     t_finish = get_time_msec();
     //uchar *one_img_cpu= (uchar*)malloc(sizeof(uchar)*LEVELS*SIZE*SIZE);
     //uchar *one_img_gpu= (uchar*)malloc(sizeof(uchar)*LEVELS*SIZE*SIZE);

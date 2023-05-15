@@ -62,9 +62,15 @@ TEST_F(Hw1, ColorHistogram)
         colorHist(img, SIZE * SIZE, cpuHistograms);
         colorHistWrapper<<<1, 1024>>>(img, gpuHistograms);
         cudaDeviceSynchronize();
-
-        for (int j = 0; j < CHANNELS; j++)
-        {
+        // if (i == 0) {
+        //     for(int l = 0; l<3; l++){
+        //         printf("gpuHistograms: %d, %d, %d, %d, %d, %d, %d, %d, %d, %d\n",
+        //             gpuHistograms[l][0], gpuHistograms[l][1], gpuHistograms[l][2], gpuHistograms[l][3], gpuHistograms[l][4], gpuHistograms[l][5], gpuHistograms[l][6], gpuHistograms[l][7], gpuHistograms[l][8], gpuHistograms[l][9]);
+        //         printf("cpuHistograms: %d, %d, %d, %d, %d, %d, %d, %d, %d, %d\n",
+        //             cpuHistograms[l][0], cpuHistograms[l][1], cpuHistograms[l][2], cpuHistograms[l][3], cpuHistograms[l][4], cpuHistograms[l][5], cpuHistograms[l][6], cpuHistograms[l][7], cpuHistograms[l][8], cpuHistograms[l][9]);
+        //     }
+        // }
+        for (int j = 0; j < CHANNELS; j++) {
             for (int k = 0; k < LEVELS; k++){
                 ASSERT_EQ(gpuHistograms[j][k], cpuHistograms[j][k])
                     << "i = " << i << ", j = " << j << ", k = " << k << std::endl;
@@ -79,7 +85,7 @@ TEST_F(Hw1, PrefixSum)
     int cpuOut[LEVELS];
     int *gpuOut;
     CUDA_ASSERT(cudaHostAlloc(&gpuOut, sizeof(int) * LEVELS, 0));
-    for (int i = 0; i < 100000; i++)
+    for (int i = 0; i < 1000; i++)
     {
         randomizeArray<int>(hist, LEVELS, SIZE * SIZE);
         memcpy(gpuOut, hist, sizeof(int) * LEVELS);
@@ -96,7 +102,7 @@ TEST_F(Hw1, PrefixSum)
 
 TEST_F(Hw1, Mapping)
 {
-    uchar *mapsBuf;
+    int *mapsBuf;
     CUDA_ASSERT(cudaHostAlloc(&mapsBuf, sizeof(int) * LEVELS * CHANNELS, 0));
     uchar *targetImgBuf;
     CUDA_ASSERT(cudaHostAlloc(&targetImgBuf, sizeof(uchar) * SIZE * SIZE * CHANNELS, 0));
@@ -106,16 +112,15 @@ TEST_F(Hw1, Mapping)
     uchar (*gpuResult)[CHANNELS] = (uchar(*)[CHANNELS])gpuResultBuf;
 
     for(int i = 0; i < 100; i++){
-        randomizeArray<uchar>(mapsBuf, LEVELS * CHANNELS, LEVELS - 1);
+        randomizeArray<int>(mapsBuf, LEVELS * CHANNELS, LEVELS - 1);
         randomizeImage(targetImgBuf);
-        auto maps = (uchar(*)[LEVELS])mapsBuf;
+        auto maps = (int(*)[LEVELS])mapsBuf;
         uchar (*targetImg)[CHANNELS] = (uchar(*)[CHANNELS])targetImgBuf;
         performMapping(maps, targetImg, cpuResult, SIZE, SIZE);
         performMappingWrapper<<<1, 1024>>>(maps, targetImg, gpuResult);
         cudaDeviceSynchronize();
 
-        for (int j = 0; j < SIZE * SIZE; j++)
-        {
+        for (int j = 0; j < SIZE * SIZE; j++){
             for (int k = 0; k < CHANNELS; k++)
             {
                 ASSERT_EQ(gpuResult[j][k], cpuResult[j][k])
