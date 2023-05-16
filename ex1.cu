@@ -92,6 +92,11 @@ void process_image_kernel(uchar *targets, uchar *refrences, uchar *results) {
     __shared__ int map_cdf[CHANNELS][LEVELS];
     __shared__ int histogramsShared_target[CHANNELS][LEVELS];
     __shared__ int histogramsShared_refrence[CHANNELS][LEVELS];
+    zero_array((int*)histogramsShared_target,   CHANNELS * LEVELS);
+    zero_array((int*)histogramsShared_refrence, CHANNELS * LEVELS);
+    zero_array((int*)map_cdf,                   CHANNELS * LEVELS);
+    zero_array((int*)deleta_cdf_row,            LEVELS);
+
     auto target   = (uchar(*)[CHANNELS]) targets;
     auto refrence = (uchar(*)[CHANNELS]) refrences;
     auto result   = (uchar(*)[CHANNELS]) results;

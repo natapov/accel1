@@ -13,7 +13,7 @@ long long int distance_sqr_between_image_arrays(uchar *img_arr1, uchar *img_arr2
     for (int i = 0; i < N_IMAGES * CHANNELS * SIZE * SIZE; i++) {
         distance_sqr += SQR(img_arr1[i] - img_arr2[i]);
         if(!foundMistake && (img_arr1[i] - img_arr2[i] != 0)){
-            //printf("%d: %d - %d = %d\n",i, img_arr1[i], img_arr2[i],  img_arr1[i] - img_arr2[i]);
+            printf("AAAAAA   AA %d: %d - %d = %d\n",i, img_arr1[i], img_arr2[i],  img_arr1[i] - img_arr2[i]);
             foundMistake = true;
         }
     }
