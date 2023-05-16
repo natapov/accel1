@@ -78,7 +78,6 @@ __device__ void performMapping(int maps[][LEVELS], uchar targetImg[][CHANNELS], 
         for (int j = 0; j < CHANNELS; j++){
             int *mapChannel = maps[j];
             outRgbPixel[j] = mapChannel[inRgbPixel[j]];
-            //printf("aaa:%d :",mapChannel[inRgbPixel[j]]);
         }
     }    
 }
@@ -88,6 +87,7 @@ __global__
 void process_image_kernel(uchar *targets, uchar *refrences, uchar *results) {
     int tid = threadIdx.x;;
     int threads = blockDim.x;
+    int bid = blockIdx.x;
     __shared__ int deleta_cdf_row[LEVELS];
     __shared__ int map_cdf[CHANNELS][LEVELS];
     __shared__ int histogramsShared_target[CHANNELS][LEVELS];
@@ -97,9 +97,9 @@ void process_image_kernel(uchar *targets, uchar *refrences, uchar *results) {
     zero_array((int*)map_cdf,                   CHANNELS * LEVELS);
     zero_array((int*)deleta_cdf_row,            LEVELS);
 
-    auto target   = (uchar(*)[CHANNELS]) targets;
-    auto refrence = (uchar(*)[CHANNELS]) refrences;
-    auto result   = (uchar(*)[CHANNELS]) results;
+    auto target   = (uchar(*)[CHANNELS]) &targets[  bid * img_size];
+    auto refrence = (uchar(*)[CHANNELS]) &refrences[bid * img_size];
+    auto result   = (uchar(*)[CHANNELS]) &results[  bid * img_size];
 
     colorHist(target, histogramsShared_target);
     colorHist(refrence, histogramsShared_refrence);
@@ -170,15 +170,18 @@ void task_serial_process(struct task_serial_context *context, uchar *images_targ
 /* Release allocated resources for the task-serial implementation. */
 void task_serial_free(struct task_serial_context *context)
 {
-    cudaFree((void**)context->refrence_single);
-    cudaFree((void**)context->target_single);
-    cudaFree((void**)context->result_single);
+    cudaFree(context->refrence_single);
+    cudaFree(context->target_single);
+    cudaFree(context->result_single);
     free(context);
 }
 
 /* Bulk GPU context struct with necessary CPU / GPU pointers to process all the images */
 struct gpu_bulk_context {
-    // TODO define bulk-GPU memory buffers
+    // define bulk-GPU memory buffers
+    uchar *target_single   = nullptr;
+    uchar *refrence_single = nullptr;
+    uchar *result_single   = nullptr;
 };
 
 /* Allocate GPU memory for all the input and output images.
@@ -187,8 +190,10 @@ struct gpu_bulk_context *gpu_bulk_init()
 {
     auto context = new gpu_bulk_context;
 
-    //TODO: allocate GPU memory for all input images and all output images
-
+    // allocate GPU memory for all input images and all output images
+    CUDA_CHECK( cudaMalloc((void**)&(context->target_single),  N_IMAGES * img_size) );
+    CUDA_CHECK( cudaMalloc((void**)&(context->refrence_single),N_IMAGES * img_size) );
+    CUDA_CHECK( cudaMalloc((void**)&(context->result_single),  N_IMAGES * img_size) );
     return context;
 }
 
@@ -196,16 +201,22 @@ struct gpu_bulk_context *gpu_bulk_init()
  * provided output host array */
 void gpu_bulk_process(struct gpu_bulk_context *context, uchar *images_target, uchar *images_refrence, uchar *images_result)
 {
-    //TODO: copy all input images from images_in to the GPU memory you allocated
-    //TODO: invoke a kernel with N_IMAGES threadblocks, each working on a different image
-    //TODO: copy output images from GPU memory to images_out
-
+    // copy all input images from images_in to the GPU memory you allocated
+    // invoke a kernel with N_IMAGES threadblocks, each working on a different image
+    // copy output images from GPU memory to images_out
+    CUDA_CHECK( cudaMemcpy(context->target_single,   images_target,   N_IMAGES * img_size, cudaMemcpyHostToDevice) );
+    CUDA_CHECK( cudaMemcpy(context->refrence_single, images_refrence, N_IMAGES * img_size, cudaMemcpyHostToDevice) );
+    process_image_kernel<<<N_IMAGES, 256>>>(context->target_single, context->refrence_single, context->result_single);
+    CUDA_CHECK( cudaMemcpy(images_result, context->result_single, N_IMAGES * img_size, cudaMemcpyDeviceToHost) );
 }
 
 /* Release allocated resources for the bulk GPU implementation. */
 void gpu_bulk_free(struct gpu_bulk_context *context)
 {
-    //TODO: free resources allocated in gpu_bulk_init
+    // free resources allocated in gpu_bulk_init
+    cudaFree(context->refrence_single);
+    cudaFree(context->target_single);
+    cudaFree(context->result_single);
     free(context);
 }
 
