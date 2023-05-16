@@ -1,5 +1,7 @@
 #include "ex1.h"
 using namespace std;
+
+const int img_size = SIZE * SIZE * CHANNELS;
 __device__ void prefixSum(int arr[], int size, int tid, int threads) {
     int increment;
     const auto is_active = tid < size;
@@ -138,10 +140,10 @@ struct task_serial_context {
 struct task_serial_context* task_serial_init()
 {
     auto context = new task_serial_context;
-    //TODO: allocate GPU memory for a single input image and a single output image
-    CUDA_CHECK( cudaMalloc((void**)&(context->target_single),SIZE*SIZE*LEVELS) ); 
-    CUDA_CHECK( cudaMalloc((void**)&(context->refrence_single),SIZE*SIZE*LEVELS) ); 
-    CUDA_CHECK( cudaMalloc((void**)&(context->result_single),SIZE*SIZE*LEVELS) ); 
+    //allocate GPU memory for a single input image and a single output image
+    CUDA_CHECK( cudaMalloc((void**)&(context->target_single),   img_size) ); 
+    CUDA_CHECK( cudaMalloc((void**)&(context->refrence_single), img_size) ); 
+    CUDA_CHECK( cudaMalloc((void**)&(context->result_single),   img_size) ); 
     return context;
 }
 
@@ -149,12 +151,15 @@ struct task_serial_context* task_serial_init()
  * provided output host array */
 void task_serial_process(struct task_serial_context *context, uchar *images_target, uchar *images_refrence, uchar *images_result)
 {
-    const int size_img = LEVELS*SIZE*SIZE;
-    CUDA_CHECK( cudaMemcpy(context->target_single,  images_target  , size_img, cudaMemcpyHostToDevice) );
-    CUDA_CHECK( cudaMemcpy(context->refrence_single,images_refrence, size_img, cudaMemcpyHostToDevice) );
-    process_image_kernel<<<1,256>>>(context->target_single, context->refrence_single, context->result_single);
-    CUDA_CHECK( cudaMemcpy(images_result, context->result_single, size_img, cudaMemcpyDeviceToHost) );
-
+    for(int i = 0; i < N_IMAGES; i++) {
+        CUDA_CHECK( cudaMemcpy(context->target_single,   images_target,   img_size, cudaMemcpyHostToDevice) );
+        CUDA_CHECK( cudaMemcpy(context->refrence_single, images_refrence, img_size, cudaMemcpyHostToDevice) );
+        process_image_kernel<<<1,256>>>(context->target_single, context->refrence_single, context->result_single);
+        CUDA_CHECK( cudaMemcpy(images_result, context->result_single, img_size, cudaMemcpyDeviceToHost) );
+        images_target   += img_size;
+        images_refrence += img_size;
+        images_result   += img_size;
+    }
 }
 
 /* Release allocated resources for the task-serial implementation. */

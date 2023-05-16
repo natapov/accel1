@@ -10,20 +10,13 @@
 long long int distance_sqr_between_image_arrays(uchar *img_arr1, uchar *img_arr2) {
     long long int distance_sqr = 0;
     bool foundMistake = false;
-    int yes = 0;
-    int no  = 0;
-    for (int i = 0; i < 1 * CHANNELS * SIZE * SIZE; i++) {
+    for (int i = 0; i < N_IMAGES * CHANNELS * SIZE * SIZE; i++) {
         distance_sqr += SQR(img_arr1[i] - img_arr2[i]);
         if(!foundMistake && (img_arr1[i] - img_arr2[i] != 0)){
-            printf("%d: %d - %d = %d\n",i, img_arr1[i], img_arr2[i],  img_arr1[i] - img_arr2[i]);
-            foundMistake = false;
-            no++;
-        }
-        else {
-            yes++;
+            //printf("%d: %d - %d = %d\n",i, img_arr1[i], img_arr2[i],  img_arr1[i] - img_arr2[i]);
+            foundMistake = true;
         }
     }
-    printf("Correct: %d, incorrect: %d\n", yes, no);
     return distance_sqr;
 }
 
@@ -77,24 +70,12 @@ int main() {
     CUDA_CHECK(cudaDeviceSynchronize());
     t_start = get_time_msec();
     task_serial_process(ts_context, images_target, images_refrence, images_out_gpu_serial);
-    cudaDeviceSynchronize();
-    cudaError_t error=cudaGetLastError();
-    if (error!=cudaSuccess) 
-    {
-        fprintf(stderr,"Kernel execution failed:%s\n",cudaGetErrorString(error));
-        return 1;
-    }
     t_finish = get_time_msec();
-    //uchar *one_img_cpu= (uchar*)malloc(sizeof(uchar)*LEVELS*SIZE*SIZE);
-    //uchar *one_img_gpu= (uchar*)malloc(sizeof(uchar)*LEVELS*SIZE*SIZE);
-    //one_img_cpu=images_out_cpu;
-    //one_img_gpu=images_out_gpu_serial;
     distance_sqr = distance_sqr_between_image_arrays(images_out_cpu, images_out_gpu_serial);
     printf("total time %f [msec]  distance from baseline %lld (should be zero)\n", t_finish - t_start, distance_sqr);
 
     task_serial_free(ts_context);
-    
-    /*
+
     // GPU bulk
     printf("\n=== GPU Bulk ===\n");
     struct gpu_bulk_context *gb_context = gpu_bulk_init();
@@ -106,6 +87,6 @@ int main() {
     printf("total time %f [msec]  distance from baseline %lld (should be zero)\n", t_finish - t_start, distance_sqr);
 
     gpu_bulk_free(gb_context);
-    */
+
     return 0;
 }
